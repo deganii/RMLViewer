@@ -3,6 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RMLViewer", "RMLViewer\RMLViewer.csproj", "{F8F33013-7C43-4BB9-BFA9-7010BC96B567}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RMLViewer3D", "RMLViewer3D\RMLViewer3D.csproj", "{7906D90C-0261-49CA-91CE-202CB1B8FCF0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -13,6 +15,10 @@ Global
 		{F8F33013-7C43-4BB9-BFA9-7010BC96B567}.Debug|x86.Build.0 = Debug|x86
 		{F8F33013-7C43-4BB9-BFA9-7010BC96B567}.Release|x86.ActiveCfg = Release|x86
 		{F8F33013-7C43-4BB9-BFA9-7010BC96B567}.Release|x86.Build.0 = Release|x86
+		{7906D90C-0261-49CA-91CE-202CB1B8FCF0}.Debug|x86.ActiveCfg = Debug|x86
+		{7906D90C-0261-49CA-91CE-202CB1B8FCF0}.Debug|x86.Build.0 = Debug|x86
+		{7906D90C-0261-49CA-91CE-202CB1B8FCF0}.Release|x86.ActiveCfg = Release|x86
+		{7906D90C-0261-49CA-91CE-202CB1B8FCF0}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
