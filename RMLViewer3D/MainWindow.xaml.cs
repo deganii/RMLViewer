@@ -19,6 +19,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using HelixToolkit.Wpf;
 using Microsoft.Win32;
 
@@ -125,6 +126,18 @@ namespace RMLViewer3D
             }
         }
 
+        private int _partOffsetZ;
+        public int PartOffsetZ
+        {
+            get { return _partOffsetZ; }
+            set
+            {
+                _partOffsetZ = value;
+                RaisePropertyChanged("PartOffsetZ");
+            }
+        }
+
+
         private int _manualMoveStepIdx = 3;
         public int ManualMoveStepIndex
         {
@@ -149,7 +162,7 @@ namespace RMLViewer3D
         }
 
         
-        private string _selectedDisplayUnit = "steps";
+        private string _selectedDisplayUnit = "mm";
         public string SelectedDisplayUnit
         {
             get { return _selectedDisplayUnit; }
@@ -187,7 +200,32 @@ namespace RMLViewer3D
             }
         }
 
+        private string _elapsedTime;
+        public string ElapsedTime
+        {
+            get { return _elapsedTime; }
+            set
+            {
+                _elapsedTime = value;
+                RaisePropertyChanged("ElapsedTime");
+            }
+        }
 
+
+        private int _jobProgress;
+        public int JobProgress
+        {
+            get { return _jobProgress; }
+            set
+            {
+                _jobProgress = value;
+                RaisePropertyChanged("JobProgress");
+            }
+        }
+
+
+
+        private PenPlotterConfig _rawPenConfig;
         private PenPlotterConfig _penConfig;
 
         private OpenFileDialog openFileDialog;
@@ -195,7 +233,7 @@ namespace RMLViewer3D
         private class RMLCommands
         {
             private static Regex PU = new Regex(@"(PU)([-+]?\d+)(,)([-+]?\d+)(;)");
-            private static Regex PD = new Regex(@"(PD)([-+]?\d+),([-+]?\d+)(;)");
+            private static Regex PD = new Regex(@"(PD)([-+]?\d+)(,)([-+]?\d+)(;)");
             private static Regex Z = new Regex(@"(Z)([-+]?\d+)(,)([-+]?\d+)(,)([-+]?\d+\.*\d*)(;)");
             // defines the "PenUp" and "PenDown" Z positions
             private static Regex PZ = new Regex(@"(!PZ)([-+]?\d+)(,)([-+]?\d+)(;)");
@@ -264,6 +302,11 @@ namespace RMLViewer3D
                 // Open document
                 var filename = openFileDialog.FileName;
 
+                // clear part offsets and pen up/down settings
+                PartOffsetX = PartOffsetY = PartOffsetZ = 0;
+                _penConfig.PenDownZ = _penConfig.PenUpZ = 0;
+                _rawPenConfig = _penConfig;
+
                 // open the file
                 using (var s = new StreamReader(filename))
                 {
@@ -280,6 +323,7 @@ namespace RMLViewer3D
                         var speedRegexes = RMLCommands.SpeedRegexes;
                         var hasSpeedMatch = speedRegexes.FirstOrDefault(
                             r => r.IsMatch(lineC));
+                        var isMotionCommand = false;
                         if (hasMatch != null)
                         {
                             var match = hasMatch.Match(lineC);
@@ -288,18 +332,22 @@ namespace RMLViewer3D
                             switch (match.Groups[1].Value)
                             {
                                 case "PU":
+                                    isMotionCommand = true;
                                     points.AddTwice(new Point3D(i1, i2, _penConfig.PenUpZ));
                                     break;
                                 case "PD":
+                                    isMotionCommand = true;
                                     points.AddTwice(new Point3D(i1, i2, _penConfig.PenDownZ));
                                     break;
                                 case "PZ":
                                     _penConfig.PenUpZ = i1;
                                     _penConfig.PenDownZ = i2;
+                                    _rawPenConfig = _penConfig;
                                     break;
                                 case "Z":
                                     var i3 = double.Parse(match.Groups[6].Value);
                                     points.AddTwice(new Point3D(i1, i2, i3));
+                                    isMotionCommand = true;
                                     break;
                             }
                         }
@@ -314,7 +362,7 @@ namespace RMLViewer3D
                               StartIndex = points.Count - 3,
                               EndIndex = points.Count - 2,
                               // get a rough time estimate from the last point
-                              ExecutionTime = points.Count - 3 >= 0 ? 
+                              ExecutionTime = isMotionCommand && points.Count - 3 >= 0 ? 
                                (points[points.Count - 3].DistanceTo(
                                 points[points.Count - 2]) / STEPS_PER_MM) / currentSpeed : 0
                         });
@@ -324,10 +372,17 @@ namespace RMLViewer3D
                     points.RemoveAt(points.Count - 1);
                     this.Points = points;
                     this.RMLInstructions = instructions;
-                    PartOffsetX = PartOffsetY = 0;
+
+                    // dump all execution times
+                    var sb = new StringBuilder();
+                    foreach(var ins in RMLInstructions)
+                    {
+                        sb.Append(string.Format("{0:00.00} -- {1}{2}", ins.ExecutionTime, ins.Line, Environment.NewLine));
+                    }
+                    
+
                     _rawPoints = points.Clone();
                     _rawInstructions = RMLInstructions.Clone();
-
                     // max dimension square:
                     // X: 203.2mm
                     // Y: 152.4mm
@@ -340,7 +395,7 @@ namespace RMLViewer3D
                         Width  = MMToSteps(152.4),
                         Height = MMToSteps(5)
                     };
-                    mdx20Base.Center = new Point3D(mdx20Base.Length/2.0, mdx20Base.Width/2.0, minZ*1.5);
+                    mdx20Base.Center = new Point3D(mdx20Base.Length/2.0, mdx20Base.Width/2.0, minZ - mdx20Base.Height/2.0 - 1.5*40);
                     viewport.Children.Add(mdx20Base);
                     ResetView();
                     viewport.Camera.LookAt(mdx20Base.Center, 0);
@@ -388,7 +443,7 @@ namespace RMLViewer3D
                     var match = hasMatch.Match(rml.Line);
                     var i1 = double.Parse(match.Groups[2].Value) + PartOffsetX;
                     var i2 = double.Parse(match.Groups[4].Value) + PartOffsetY;
-                    var offset = new Point3D(PartOffsetX, PartOffsetY, 0);
+                    var offset = new Point3D(PartOffsetX, PartOffsetY, PartOffsetZ);
                     switch (match.Groups[1].Value)
                     {
                         case "PU":
@@ -401,14 +456,20 @@ namespace RMLViewer3D
                             translatedPts.Translate(rml.EndIndex, offset);
                             break;
                         case "PZ":
-                            // nothing needed
+                            // modify just the down position by just the z offset
+                            _penConfig.PenDownZ = _rawPenConfig.PenDownZ + PartOffsetZ;
+                            rml.Line = string.Format("{0}{1}{2}{3}{4}",
+                                match.Groups[1].Value, _penConfig.PenUpZ,
+                                match.Groups[3].Value, _penConfig.PenDownZ,
+                                match.Groups[5].Value);
                             break;
                         case "Z":
-                            var i3 = match.Groups[6].Value;
+                            var i3 = double.Parse(match.Groups[6].Value) + PartOffsetZ;
                             rml.Line = string.Format("{0}{1}{2}{3}{4}{5}{6}",
                                 match.Groups[1].Value, FormatCoordinate(i1),
                                 match.Groups[3].Value, FormatCoordinate(i2),
-                                match.Groups[5].Value, i3, match.Groups[7].Value);
+                                match.Groups[5].Value, FormatCoordinate(i3), 
+                                match.Groups[7].Value);
                             translatedPts.Translate(rml.StartIndex, offset);
                             translatedPts.Translate(rml.EndIndex, offset);
                             break;
@@ -424,6 +485,8 @@ namespace RMLViewer3D
             // update bounding box
             UpdatePartInfo();
         }
+
+        private double _totalBuildTime = 0.0;
 
         private void UpdatePartInfo()
         {
@@ -447,10 +510,37 @@ namespace RMLViewer3D
             var infoDim = string.Format("Dimension (L: {0}, W: {1}, H: {2})",
                              dim.X, dim.Y, dim.Z);
 
-            var totalBuildTime = string.Format("Time: {0:h\\:mm\\:ss}", 
-                new TimeSpan(0,0,(int)RMLInstructions.Sum(r => r.ExecutionTime)));
+            _totalBuildTime = RMLInstructions.Sum(r => r.ExecutionTime);
+            var totalBuildTime = string.Format("Time: {0:h\\:mm\\:ss}",
+                new TimeSpan(0, 0, (int)_totalBuildTime));
 
             PartInfo = string.Join(" | ", infoMin, infoMax, infoDim, totalBuildTime);
+        }
+
+        //private int _lastUpdateInstructionIdx;
+        //private double _lastUpdateExecutionTime;
+        private void UpdateElapsedTimeAndInstruction(object sender, EventArgs e)
+        {
+            var elapsedTime = DateTime.Now - _jobStartTime;
+
+            ElapsedTime  = string.Format("Elapsed: {0:h\\:mm\\:ss}", elapsedTime);
+
+            var executionTime = 0.0;
+            for(var i = 0 + 1; i< RMLInstructions.Count; i++)
+            {
+                // guesstimate which line it's currently processing and select it
+                executionTime += RMLInstructions[i].ExecutionTime;
+                if(executionTime > elapsedTime.TotalSeconds)
+                {
+                    listBoxRml.SelectedItem = RMLInstructions[i];
+                    listBoxRml.ScrollIntoView(RMLInstructions[i]);
+                    //_lastUpdateExecutionTime = executionTime;
+                    //_lastUpdateInstructionIdx = i;
+
+                    JobProgress = (int) (100.0 * (executionTime/_totalBuildTime));
+                    return;
+                }
+            }
         }
 
         private void ResetViewClick(object sender, RoutedEventArgs e)
@@ -666,14 +756,21 @@ namespace RMLViewer3D
         public event PropertyChangedEventHandler PropertyChanged;
 
         private bool _runningJob = false;
-
+        private DateTime _jobStartTime;
+        private DispatcherTimer _dispatcherTimer;
         private void RunClick(object sender, RoutedEventArgs e)
         {
-            // disable all manual tools
-            UpdateRunningState(true);
-            ThreadPool.QueueUserWorkItem(wcb => RunCurrentJob());
-        }
+            if (_dispatcherTimer == null)
+            {
+                _dispatcherTimer = new DispatcherTimer();
+                _dispatcherTimer.Tick += UpdateElapsedTimeAndInstruction;
+                _dispatcherTimer.Interval = new TimeSpan(0, 0, 1);
+            }
 
+            // disable all manual tools, start update timer
+            UpdateRunningState(true);
+            ThreadPool.QueueUserWorkItem(RunCurrentJob, RMLInstructions.Clone());
+        }
 
         private void StopClick(object sender, RoutedEventArgs e)
         {
@@ -684,13 +781,21 @@ namespace RMLViewer3D
         private void UpdateRunningState(bool running)
         {
             _runningJob = running;
+            if(_runningJob)
+            {
+                //_lastUpdateInstructionIdx = 0;
+                //_lastUpdateExecutionTime = 0.0;
+                _jobStartTime = DateTime.Now;
+                _dispatcherTimer.Start();
+            } else
+            {
+                _dispatcherTimer.Stop();
+            }
             groupBox1.IsEnabled = !running;
             ToolbarOffsets.IsEnabled = !running;
             MenuFile.IsEnabled = !running;
             buttonRun.IsEnabled = !running;
             buttonStop.IsEnabled = running;
-            //listBox1.IsHitTestVisible = !running;
-
         }
 
 
@@ -699,45 +804,49 @@ namespace RMLViewer3D
             /*serialModule.Connect();
             serialModule.Write("Z50,50,0;");
             serialModule.Disconnect();*/
-            printModule.PrintLines("PA;PA;!VZ10;!PZ0,100;PU0,0;PD0,0;!MC0;");
+            //printModule.PrintLines("PA;PA;!VZ10;!PZ0,100;PU0,0;PD0,0;!MC0;");
         }
 
-        private void RunCurrentJob()
+        //AutoResetEvent _runWCB = new AutoResetEvent(false);
+
+        private void RunCurrentJob(object state)
         {
-            //var dispatcher = Application.Current.MainWindow.Dispatcher;
+            var rml = (ObservableCollection<RMLInstruction>) state;
+            //_timerRunStatus = new Timer(cb => UpdateElapsedTimeAndInstruction(), null, 0, 1000);
 
-            // send instructions 30 seconds at a time
-            const int timeChunk = 30;
-
- 
+            // send instructions 300 seconds at a time
+            const int timeChunk = 30000;
             var currentTime = 0.0;
             var currentRMLBlock = new StringBuilder();
-            var executedInstructionIdx = 0;
-            for (var i = 0; i < RMLInstructions.Count; i++ )
+            //var executedInstructionIdx = 0;
+            for (var i = 0; i < rml.Count; i++)
             {
+                if (!_runningJob)  {
+                    return;
+                }
                 var currentIdx = i;
-                currentTime += RMLInstructions[i].ExecutionTime;
-                currentRMLBlock.Append(RMLInstructions[i].Line);
-                if (currentTime > timeChunk || currentRMLBlock.Length > 1000 || 
-                    currentIdx == RMLInstructions.Count - 1)
+                currentTime += rml[i].ExecutionTime;
+                currentRMLBlock.Append(rml[i].Line);
+                if (currentTime > timeChunk || currentRMLBlock.Length > 750000 ||
+                    currentIdx == rml.Count - 1)
                 {
                     // print this block and sleep the thread
-                    Dispatcher.BeginInvoke(new Action<string, int, int>(
-                        (c, j, k) => {
+                    Dispatcher.BeginInvoke(new Action<string, int>(
+                        (c, k) => {
+                            if (!_runningJob) {
+                                return;
+                            }
                             printModule.PrintLines(c);
                             // update the list
-                            for (var l = j; l < k; l++) {
-                                RMLInstructions[k].Executed = true;
+                            for (var l = 0; l < k; l++) {
+                                RMLInstructions[l].Executed = true;
                             }
-                            executedInstructionIdx = currentIdx;
-                            listBoxRml.ScrollIntoView(RMLInstructions[k]);
-                        }), currentRMLBlock.ToString(), executedInstructionIdx, currentIdx);
+                            //listBoxRml.ScrollIntoView(RMLInstructions[k]);
+                            //listBoxRml.UpdateLayout();
+                        }), currentRMLBlock.ToString(), currentIdx);
                     if ((int)(currentTime * 1000.0) > 1000)
                     {
                         Thread.Sleep((int) (currentTime*1000.0) - 500);
-                    } else
-                    {
-
                     }
                     currentRMLBlock.Clear();
                     currentTime = 0.0;
@@ -745,6 +854,7 @@ namespace RMLViewer3D
             }
             Dispatcher.BeginInvoke(new Action(() => UpdateRunningState(false)));
         }
+
 
 
         void WindowClosing(object sender, CancelEventArgs e)
@@ -796,6 +906,13 @@ namespace RMLViewer3D
 
         private void MoveXYPreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (textPartOffsetX.IsKeyboardFocusWithin || textPartOffsetY.IsKeyboardFocusWithin || textPartOffsetZ.IsKeyboardFocusWithin
+                || listBoxRml.IsKeyboardFocusWithin || textToolX.IsKeyboardFocusWithin || textToolY.IsKeyboardFocusWithin || 
+                listBoxRml.IsKeyboardFocusWithin)
+            {
+                return;
+            }
+
             if(_runningJob)
             {
                 return;
@@ -867,6 +984,7 @@ namespace RMLViewer3D
             ((UnitConverter) FindResource("UnitConverter")).DisplayUnits = SelectedDisplayUnit;
             BindingOperations.GetBindingExpressionBase(textPartOffsetX, TextBox.TextProperty).UpdateTarget();
             BindingOperations.GetBindingExpressionBase(textPartOffsetY, TextBox.TextProperty).UpdateTarget();
+            BindingOperations.GetBindingExpressionBase(textPartOffsetZ, TextBox.TextProperty).UpdateTarget();
             BindingOperations.GetBindingExpressionBase(textToolX, TextBox.TextProperty).UpdateTarget();
             BindingOperations.GetBindingExpressionBase(textToolY, TextBox.TextProperty).UpdateTarget();
 
@@ -884,11 +1002,6 @@ namespace RMLViewer3D
             UpdatePartInfo();
         }
 
-        private void UpdateUnitTargets(DependencyObject target)
-        {
-            
-        }
-
         private void TextBoxValueCommit(object sender, KeyEventArgs e)
         {
             var textbox = (TextBox)sender;
@@ -904,6 +1017,7 @@ namespace RMLViewer3D
                 {
                     case "textPartOffsetX": 
                     case "textPartOffsetY":
+                    case "textPartOffsetZ":
                         TranslatePart();
                         break;
                     case "textToolX":
@@ -911,7 +1025,13 @@ namespace RMLViewer3D
                         MoveXY();
                         break;
                 }
+                Keyboard.ClearFocus();
+                Focus();
+
+                //MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
             }
+            
+
         }
 
         private void ButtonGoClick(object sender, RoutedEventArgs e)

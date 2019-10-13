@@ -11,7 +11,7 @@ namespace RMLViewer3D
 {
     class UnitConverter : IValueConverter, INotifyPropertyChanged
     {
-        private string _displayUnits = "steps";
+        private string _displayUnits = "mm";
         public string DisplayUnits
         {
             get { return _displayUnits; }
@@ -61,7 +61,7 @@ namespace RMLViewer3D
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if(value == null)
+            if(value == null || (value is string && string.IsNullOrWhiteSpace((string)value)))
             {
                 return 0;
             }

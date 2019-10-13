@@ -37,15 +37,43 @@
                 <Label Content="Y:"></Label>
                 <TextBox Text="{Binding PartOffsetY,Mode=TwoWay,Converter={StaticResource UnitConverter}}"  
                          Height="23" Name="textPartOffsetY" Width="50" KeyDown="TextBoxValueCommit"/>
+                <Label Content="Z:"></Label>
+                <TextBox Text="{Binding PartOffsetZ,Mode=TwoWay,Converter={StaticResource UnitConverter}}"  
+                         Height="23" Name="textPartOffsetZ" Width="50" KeyDown="TextBoxValueCommit"/>
                 <Label Content="Global Units:"></Label>
                 <ComboBox Height="23" Name="comboUnits" Width="50" 
                           SelectedValue="{Binding SelectedDisplayUnit}"
                           ItemsSource="{Binding DisplayUnits}">
                 </ComboBox>
-                <Label Content="{Binding PartInfo}" Height="28" Name="label3" />
+                
         </ToolBar>
-
         </ToolBarTray>
+        <StatusBar Height="23" Name="statusBar" DockPanel.Dock ="Bottom">
+            <StatusBar.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="100" />
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+                </ItemsPanelTemplate>
+            </StatusBar.ItemsPanel>
+            <StatusBarItem >
+                <TextBlock Text="{Binding ElapsedTime}" />
+            </StatusBarItem>
+            <Separator Grid.Column="1" BorderBrush="LightGray" BorderThickness="1" />
+            <StatusBarItem Grid.Column="2" >
+                <TextBlock Text="{Binding PartInfo}" />
+            </StatusBarItem>
+            <Separator Grid.Column="3" BorderBrush="LightGray" BorderThickness="1" />
+            <StatusBarItem Grid.Column="4">
+                <ProgressBar Value="{Binding JobProgress}" Width="90" Height="16" />
+            </StatusBarItem>
+        </StatusBar>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="200" />
@@ -56,8 +84,22 @@
             <ColumnDefinition Width="1*" />
             <ColumnDefinition Width="175" />
         </Grid.ColumnDefinitions>
-        <h:HelixViewport3D x:Name="viewport" InfiniteSpin="False" ShowFrameRate="True" Grid.RowSpan="2" >
-            <h:DefaultLights />
+        <h:HelixViewport3D x:Name="viewport" InfiniteSpin="False" ShowFrameRate="True" 
+                           Grid.RowSpan="2" >
+                <h:HelixViewport3D.RotateGesture2>
+                    <MouseGesture MouseAction="MiddleClick"></MouseGesture>
+                </h:HelixViewport3D.RotateGesture2>            
+                <h:HelixViewport3D.RotateGesture>
+                    <MouseGesture MouseAction="MiddleClick"></MouseGesture>
+                </h:HelixViewport3D.RotateGesture>
+                <h:HelixViewport3D.PanGesture>
+                    <MouseGesture MouseAction="RightClick"></MouseGesture>
+                </h:HelixViewport3D.PanGesture>
+                <h:HelixViewport3D.PanGesture2>
+                    <MouseGesture MouseAction="RightClick"></MouseGesture>
+                </h:HelixViewport3D.PanGesture2>
+
+                <h:DefaultLights />
             <!--Points="1,1,1,2,2,2,3,3,3,5,7,8,-5,5,-7,-2,-6,7"-->
             <h:LinesVisual3D Points="{Binding Points,Mode=TwoWay}" Color="Blue" Thickness="2"/>
             <h:LinesVisual3D Points="{Binding HighlightedPoints}" Color="Red" Thickness="4"/>
@@ -73,7 +115,7 @@
                 <ListBox.ItemTemplate>
                 <DataTemplate>
                     <Grid Margin="0,2">
-                            <TextBlock Text="{Binding Line}" Foreground="{Binding Executed, 
+                            <TextBlock Text="{Binding Line}" Foreground="{Binding Executed,Mode=TwoWay,
                                 Converter={StaticResource RMLExecutionStateConverter}}" />
                     </Grid>
                 </DataTemplate>
@@ -109,5 +151,6 @@
             <Button Content="Load RML..." Click="LoadClick" />
         </ToolBar>-->
     </Grid>
+        
     </DockPanel>
 </Window>
